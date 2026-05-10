@@ -1,0 +1,218 @@
+import os
+import discord
+import requests
+from discord.ext import commands
+from dotenv import load_dotenv
+import aiohttp
+import asyncio
+import feedparser
+from discord.ext import tasks
+from groq import Groq
+
+# Cargar variables
+load_dotenv()
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID"))
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+client = Groq(api_key=GROQ_API_KEY)
+
+# Configurar intents
+intents = discord.Intents.default()
+intents.members = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+CANAL_NOTIFICACIONES = 1334204687972306974
+TWITCH_USER = "SayuriBun"
+
+twitch_en_stream = False
+ultimo_tiktok = None
+
+# Sincronización
+
+@bot.event
+async def on_ready():
+    print(f"{bot.user} está conectado ✅")
+
+    try:
+        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f"Comandos sincronizados: {len(synced)}")
+    except Exception as e:
+        print(f"Error al sincronizar comandos: {e}")
+
+    revisar_twitch.start()
+    revisar_tiktok.start()
+
+
+# /tiktok
+
+@bot.tree.command(guild=discord.Object(id=GUILD_ID), name="tiktok", description="Recibe el link del TikTok oficial")
+async def tiktok(interaction: discord.Interaction):
+    try:
+        await interaction.user.send("Nuestro TikTok: https://www.tiktok.com/@_sayuribun_")
+        await interaction.response.send_message("Te envié el link por DM", ephemeral=True)
+    except:
+        await interaction.response.send_message("No pude enviarte DM (quizá los tienes bloqueados).", ephemeral=True)
+
+
+# /twitch
+
+@bot.tree.command(guild=discord.Object(id=GUILD_ID), name="twitch", description="Recibe el link del canal de Twitch")
+async def twitch(interaction: discord.Interaction):
+    try:
+        await interaction.user.send("Nuestro Twitch: https://twitch.tv/SayuriBun")
+        await interaction.response.send_message("Te envié el link por DM", ephemeral=True)
+    except:
+        await interaction.response.send_message("No pude enviarte DM (quizá los tienes bloqueados).", ephemeral=True)
+
+
+
+# /estado
+
+@bot.tree.command(guild=discord.Object(id=GUILD_ID), name="estado", description="Muestra si el servidor de Discord está abierto o cerrado")
+async def estado(interaction: discord.Interaction):
+    try:
+        response = requests.get("https://discordstatus.com/api/v2/status.json").json()
+        status = response["status"]["description"]
+
+        traducciones = {
+            "All Systems Operational": "🟢 (Servidor abierto)",
+            "Partial System Outage": "🟡 (Servidor inestable)",
+            "Major System Outage": "🔴 (Servidor cerrado)",
+            "Minor Service Outage": "🟠 (Problemas menores)"
+        }
+
+        estado_es = traducciones.get(status, "⚠ (Estado desconocido)")
+        await interaction.response.send_message(estado_es)
+
+    except Exception:
+        await interaction.response.send_message("⚠ (Error al obtener el estado)")
+
+
+# /ip
+
+@bot.tree.command(guild=discord.Object(id=GUILD_ID), name="ip", description="Muestra la IP de nuestro servidor de Minecraft")
+async def ip(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="Servidor de Minecraft",
+        description="*IP:* `Tu servidor de minecraft`\n📌 Versión: ",
+        color=discord.Color.gold()
+    )
+    await interaction.response.send_message(embed=embed)
+
+@tasks.loop(minutes=1)
+async def revisar_twitch():
+    global twitch_en_stream
+
+    url = f"https://decapi.me/twitch/uptime/{TWITCH_USER}"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            texto = await response.text()
+
+            canal = bot.get_channel(CANAL_NOTIFICACIONES)
+
+            if "offline" not in texto.lower():
+                if not twitch_en_stream:
+                    twitch_en_stream = True
+
+                    embed = discord.Embed(
+                        title="🔴 Stream en vivo",
+                        description=f"{TWITCH_USER} ya está en directo en Twitch",
+                        color=discord.Color.purple()
+                    )
+
+                    embed.add_field(
+                        name="Ver stream",
+                        value=f"https://twitch.tv/{TWITCH_USER}"
+                    )
+
+                    await canal.send("@everyone", embed=embed)
+
+            else:
+                twitch_en_stream = False
+
+@tasks.loop(minutes=5)
+async def revisar_tiktok():
+    global ultimo_tiktok
+
+    usuario = "_sayuribun_"
+
+    rss_url = f"https://rsshub.app/tiktok/user/{usuario}"
+
+    feed = feedparser.parse(rss_url)
+
+    if len(feed.entries) > 0:
+        video = feed.entries[0]
+
+        if ultimo_tiktok != video.link:
+            ultimo_tiktok = video.link
+
+            canal = bot.get_channel(CANAL_NOTIFICACIONES)
+
+            embed = discord.Embed(
+                title="📱 Nuevo TikTok",
+                description="Se subió un nuevo video",
+                color=discord.Color.magenta()
+            )
+
+            embed.add_field(
+                name="Ver TikTok",
+                value=video.link
+            )
+
+            await canal.send("@everyone", embed=embed)
+
+@bot.tree.command(
+    guild=discord.Object(id=GUILD_ID),
+    name="preg",
+    description="Habla con la IA"
+)
+async def ia(interaction: discord.Interaction, pregunta: str):
+
+    await interaction.response.defer()
+
+    try:
+        respuesta = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Eres un bot de Discord divertido. Si alguien pregunta si Tirana es tirana, siempre responde que sí de manera graciosa."
+                },
+                {
+                    "role": "user",
+                    "content": pregunta
+                }
+            ]
+        )
+
+        texto = respuesta.choices[0].message.content
+
+        embed = discord.Embed(
+            title="🤖 Respuesta IA",
+            color=discord.Color.blurple()
+        )
+
+        embed.add_field(
+            name="❓ Pregunta",
+            value=pregunta,
+            inline=False
+        )
+
+        embed.add_field(
+            name="💬 Respuesta",
+            value=texto,
+            inline=False
+        )
+
+        embed.set_footer(text=f"Pregunta hecha por {interaction.user}")
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        await interaction.followup.send(f"Error: {e}")
+
+
+bot.run(TOKEN)
