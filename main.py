@@ -67,29 +67,6 @@ async def twitch(interaction: discord.Interaction):
         await interaction.response.send_message("No pude enviarte DM (quizá los tienes bloqueados).", ephemeral=True)
 
 
-
-# /estado
-
-@bot.tree.command(guild=discord.Object(id=GUILD_ID), name="estado", description="Muestra si el servidor de Discord está abierto o cerrado")
-async def estado(interaction: discord.Interaction):
-    try:
-        response = requests.get("https://discordstatus.com/api/v2/status.json").json()
-        status = response["status"]["description"]
-
-        traducciones = {
-            "All Systems Operational": "🟢 (Servidor abierto)",
-            "Partial System Outage": "🟡 (Servidor inestable)",
-            "Major System Outage": "🔴 (Servidor cerrado)",
-            "Minor Service Outage": "🟠 (Problemas menores)"
-        }
-
-        estado_es = traducciones.get(status, "⚠ (Estado desconocido)")
-        await interaction.response.send_message(estado_es)
-
-    except Exception:
-        await interaction.response.send_message("⚠ (Error al obtener el estado)")
-
-
 # /ip
 
 @bot.tree.command(guild=discord.Object(id=GUILD_ID), name="ip", description="Muestra la IP de nuestro servidor de Minecraft")
