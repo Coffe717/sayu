@@ -1,5 +1,6 @@
 import os
 import discord
+import random
 import requests
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -216,6 +217,35 @@ async def ia(interaction: discord.Interaction, pregunta: str):
     except Exception as e:
         await interaction.followup.send(f"Error: {e}")
 
+@bot.event
+async def on_message(message):
+    # 1. Ignorar si el bot escribe para no entrar en bucle
+    if message.author == bot.user:
+        return
+
+    # 2. Probabilidad del 5% (1 de cada 20 mensajes)
+    if random.randint(1, 20) == 1:
+        async with message.channel.typing():
+            # Sacamos el contexto de los últimos mensajes
+            contexto = []
+            async for msg in message.channel.history(limit=5):
+                contexto.append(f"{msg.author.name}: {msg.content}")
+            contexto_str = "\n".join(reversed(contexto))
+
+            try:
+                # Usamos la misma lógica que ya tienes para llamar a Groq
+                respuesta = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": "Eres Sayu. Comenta algo breve y gracioso sobre la plática actual. Sé entrometida."},
+                        {"role": "user", "content": f"Contexto de la charla:\n{contexto_str}"}
+                    ]
+                )
+                await message.channel.send(respuesta.choices[0].message.content)
+            except Exception as e:
+                print(f"Error al entrometerse: {e}")
+
+    # 3. ¡VITAL! Para que el comando /preg siga funcionando
+    await bot.process_commands(message)
 
 bot.run(TOKEN)
-# Actualizacion final
