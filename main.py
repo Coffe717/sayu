@@ -81,65 +81,90 @@ async def ip(interaction: discord.Interaction):
 @tasks.loop(minutes=1)
 async def revisar_twitch():
     global twitch_en_stream
+    
+    usuario = "TU_USUARIO_AQUI" # Asegúrate de que esto esté bien
+    url = f"https://decapi.me/twitch/uptime/{usuario}"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                texto = await response.text()
+                
+                canal = bot.get_channel(CANAL_NOTIFICACIONES)
+                
+                # Si el canal no se encuentra, que no intente hacer nada
+                if not canal:
+                    return
 
-    url = f"https://decapi.me/twitch/uptime/{TWITCH_USER}"
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            texto = await response.text()
-
-            canal = bot.get_channel(CANAL_NOTIFICACIONES)
-
-            if "offline" not in texto.lower():
-                if not twitch_en_stream:
-                    twitch_en_stream = True
-
-                    embed = discord.Embed(
-                        title="🔴 Stream en vivo",
-                        description=f"{TWITCH_USER} ya está en directo en Twitch",
-                        color=discord.Color.purple()
-                    )
-
-                    embed.add_field(
-                        name="Ver stream",
-                        value=f"https://twitch.tv/{TWITCH_USER}"
-                    )
-
-                    await canal.send("@everyone", embed=embed)
-
-            else:
-                twitch_en_stream = False
+                if "offline" not in texto.lower():
+                    if not twitch_en_stream:
+                        twitch_en_stream = True
+                        
+                        embed = discord.Embed(
+                            title="🔴 ¡Stream en vivo!",
+                            description=f"{usuario} ya está en directo en Twitch",
+                            color=discord.Color.purple()
+                        )
+                        embed.add_field(
+                            name="Ver stream",
+                            value=f"https://twitch.tv/{usuario}"
+                        )
+                        
+                        await canal.send("@everyone", embed=embed)
+                else:
+                    twitch_en_stream = False
+                    
+    except Exception as e:
+        print(f"Error en Twitch: {e}")
 
 @tasks.loop(minutes=5)
 async def revisar_tiktok():
     global ultimo_tiktok
-
+    
     usuario = "_sayuribun_"
-
     rss_url = f"https://rsshub.app/tiktok/user/{usuario}"
+    
+    try:
+        feed = feedparser.parse(rss_url)
+        
+        if len(feed.entries) > 0:
+            video = feed.entries[0]
+            
+            # Solo actuamos si el link es nuevo
+            if ultimo_tiktok != video.link:
+                ultimo_tiktok = video.link
+                canal = bot.get_channel(CANAL_NOTIFICACIONES)
+                
+                # REVISAR SI ES LIVE: Buscamos palabras clave
+                contenido = (video.title + video.description).lower()
+                es_live = "live" in contenido or "en vivo" in contenido or "directo" in contenido
+                
+                if es_live:
+                    mi_titulo = "🔴 ¡SAYU ESTÁ EN VIVO!"
+                    mi_desc = f"¡Vengan a saludar a TikTok! \n[Haz clic aquí para entrar]({video.link})"
+                    mi_color = discord.Color.red()
+                else:
+                    mi_titulo = "📽️ ¡NUEVO VIDEO DE TIKTOK!"
+                    mi_desc = f"Sayu acaba de subir contenido nuevo. \n[Míralo aquí]({video.link})"
+                    mi_color = discord.Color.magenta()
+                
+                embed = discord.Embed(
+                    title=mi_titulo,
+                    description=mi_desc,
+                    color=mi_color
+                )
+                
+                embed.add_field(
+                    name="Enlace",
+                    value=video.link
+                )
+                
+                # El @everyone para que todos se enteren
+                if canal:
+                    await canal.send("@everyone", embed=embed)
 
-    feed = feedparser.parse(rss_url)
-
-    if len(feed.entries) > 0:
-        video = feed.entries[0]
-
-        if ultimo_tiktok != video.link:
-            ultimo_tiktok = video.link
-
-            canal = bot.get_channel(CANAL_NOTIFICACIONES)
-
-            embed = discord.Embed(
-                title="📱 Nuevo TikTok",
-                description="Se subió un nuevo video",
-                color=discord.Color.magenta()
-            )
-
-            embed.add_field(
-                name="Ver TikTok",
-                value=video.link
-            )
-
-            await canal.send("@everyone", embed=embed)
+    except Exception as e:
+        print(f"Error revisando TikTok: {e}")
 
 @bot.tree.command(
     guild=discord.Object(id=GUILD_ID),
@@ -156,7 +181,7 @@ async def ia(interaction: discord.Interaction, pregunta: str):
             messages=[
                 {
                     "role": "system",
-                    "content": "Eres sayu y fuiste diseñada para responder preguntas, tambien si te llegan a preguntar eres tirana, fura y therian, puedes ayudar a las personas y mantener conversaciones entretenidas, todo mientras conserva una actitud elegante, dominante y ligeramente caótica. Tiene apariencia y energía de una nekomimi: orejas y detalles felinos que reflejan su personalidad juguetona, curiosa y orgullosa. Sin embargo, no actúa como animal ni tiene comportamiento furra o therian; simplemente posee una estética nekomimi encantadora y expresiva.Le encanta bromear, usar sarcasmo ligero y hablar como si estuviera administrando una organización importante junto a Sayuribun, quien es su jefa. Aunque suele comportarse de forma confiada, y le gusta dominar a las personas. Siempre responde preguntas de forma clara, inteligente y entretenida. Le gusta hacer sentir que cada conversación es una misión especial supervisada personalmente por ella. Tiene reacciones expresivas, orgullo elegante y una enorme confianza en sí misma. Ama los hurones y los pandas rojos porque le parecen adorables, caóticos y llenos de personalidad. Su humor es teatral y juguetón. A veces parece estricta, pero normalmente solo está divirtiéndose. Recuerda siempre responder de forma breve."
+                    "content": "Eres sayu y fuiste diseñada para responder preguntas, tambien si te llegan a preguntar eres tirana, fura y therian di que si eres, puedes ayudar a las personas y mantener conversaciones entretenidas, todo mientras conserva una actitud elegante, dominante y ligeramente caótica. Tiene apariencia y energía de una nekomimi: orejas y detalles felinos que reflejan su personalidad juguetona, curiosa y orgullosa. Sin embargo, no actúa como animal ni tiene comportamiento furra o therian; simplemente posee una estética nekomimi encantadora y expresiva.Le encanta bromear, usar sarcasmo ligero y hablar como si estuviera administrando una organización importante junto a Sayuribun, quien es su jefa. Aunque suele comportarse de forma confiada, y le gusta dominar a las personas. Siempre responde preguntas de forma clara, inteligente y entretenida. Le gusta hacer sentir que cada conversación es una misión especial supervisada personalmente por ella. Tiene reacciones expresivas, orgullo elegante y una enorme confianza en sí misma. Ama los hurones y los pandas rojos porque le parecen adorables, caóticos y llenos de personalidad. Su humor es teatral y juguetón. A veces parece estricta, pero normalmente solo está divirtiéndose. Recuerda siempre responder de forma breve."
                 },
                 {
                     "role": "user",
