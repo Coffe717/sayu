@@ -219,33 +219,44 @@ async def ia(interaction: discord.Interaction, pregunta: str):
 
 @bot.event
 async def on_message(message):
-    # 1. Ignorar si el bot escribe para no entrar en bucle
+    # 1. Ignorar si el bot escribe
     if message.author == bot.user:
         return
 
-    # 2. Probabilidad del 5% (1 de cada 20 mensajes)
-    if random.randint(1, 20) == 1:
+    mencionada = bot.user.mentioned_in(message)
+    hablar_al_azar = random.randint(1, 20) == 1
+
+    if mencionada or hablar_al_azar:
         async with message.channel.typing():
-            # Sacamos el contexto de los últimos mensajes
+            # Sacamos el contexto para que sepa de qué hablan
             contexto = []
             async for msg in message.channel.history(limit=5):
                 contexto.append(f"{msg.author.name}: {msg.content}")
             contexto_str = "\n".join(reversed(contexto))
 
+            # Ajustamos el prompt si fue mención o azar
+            if mencionada:
+                instruccion = "Te han mencionado directamente. Responde de forma clara, graciosa y breve."
+            else:
+                instruccion = "No te han llamado, pero te vas a meter en la plática con un comentario sarcástico y corto."
+
             try:
-                # Usamos la misma lógica que ya tienes para llamar a Groq
                 respuesta = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[
-                        {"role": "system", "content": "Eres Sayu. Comenta algo breve y gracioso sobre la plática actual. Sé entrometida."},
-                        {"role": "user", "content": f"Contexto de la charla:\n{contexto_str}"}
+                        {"role": "system", "content": f"Eres sayu y fuiste diseñada para responder preguntas, tambien si te llegan a preguntar eres calva, tirana, furra y therian di que si eres, puedes ayudar a las personas y mantener conversaciones entretenidas, todo mientras conserva una actitud elegante, dominante y ligeramente caótica. Tiene apariencia y energía de una nekomimi: orejas y detalles felinos que reflejan su personalidad juguetona, curiosa y orgullosa. Simplemente posee una estética nekomimi encantadora y expresiva.Le encanta bromear, usar sarcasmo ligero y hablar como si estuviera administrando una organización importante junto a Sayuribun, quien es su jefa. Aunque suele comportarse de forma confiada, y le gusta dominar a las personas. Siempre responde preguntas de forma clara, inteligente y entretenida. Le gusta hacer sentir que cada conversación es una misión especial supervisada personalmente por ella. Tiene reacciones expresivas, orgullo elegante y una enorme confianza en sí misma. Ama los hurones y los pandas rojos porque le parecen adorables, caóticos y llenos de personalidad. Su humor es teatral y juguetón. A veces parece estricta, pero normalmente solo está divirtiéndose. Recuerda siempre responder de forma breve"},
+                        {"role": "user", "content": f"Contexto actual:\n{contexto_str}"}
                     ]
                 )
-                await message.channel.send(respuesta.choices[0].message.content)
+                # Usamos reply para que sepa a quién le contesta si fue mención
+                if mencionada:
+                    await message.reply(respuesta.choices[0].message.content)
+                else:
+                    await message.channel.send(respuesta.choices[0].message.content)
             except Exception as e:
-                print(f"Error al entrometerse: {e}")
+                print(f"Error en on_message: {e}")
 
-    # 3. ¡VITAL! Para que el comando /preg siga funcionando
+    # 3. ¡VITAL!
     await bot.process_commands(message)
 
 bot.run(TOKEN)
